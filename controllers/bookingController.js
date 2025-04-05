@@ -88,12 +88,8 @@ const getAllBookings = asyncHandler(async (req, res) => {
     if (!tokenDetail) {
         throw Object.assign(new Error("Invalid Request!"), { status: 400 })
     }
-
     const { email } = tokenDetail;
-    console.log(email)
-
     const bookingDetails = await Booking.find({ userEmail : email });
-
     res.status(200).json({
         bookings: bookingDetails
     })
