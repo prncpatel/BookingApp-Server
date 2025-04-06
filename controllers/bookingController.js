@@ -1,67 +1,44 @@
 const asyncHandler = require("express-async-handler");
-const { verifyToken } = require("../middlewares/authMiddleware");
 const Booking = require("../models/bookingModel");
-
-const isConflict = async ({ bookingDate, bookingType, bookingSlot, bookingTime }) => {
-    const bookings = await Booking.find({ bookingDate });
-
-    for (let existing of bookings) {
-        if (existing.bookingType === 'Full Day' || bookingType === 'Full Day') {
-            return true;
-        }
-
-        if (
-            bookingType === 'Half Day' &&
-            existing.bookingType === 'Half Day' &&
-            existing.bookingSlot === bookingSlot
-        ) {
-            return true;
-        }
-
-        if (
-            bookingType === 'Custom' &&
-            existing.bookingType === 'Half Day' &&
-            existing.bookingSlot === 'First Half' &&
-            bookingTime < '12:00'
-        ) {
-            return true;
-        }
-
-        if (
-            bookingType === 'Half Day' &&
-            existing.bookingType === 'Custom' &&
-            existing.bookingTime < '12:00' &&
-            bookingSlot === 'First Half'
-        ) {
-            return true;
-        }
-
-        if (
-            bookingType === 'Custom' &&
-            existing.bookingType === 'Custom' &&
-            existing.bookingTime === bookingTime
-        ) {
-            return true;
-        }
-    }
-    return false;
-};
 
 
 const requestBooking = asyncHandler(async (req, res) => {
-    const { email } = req.user;    
-    if(!email) {
+    const { email } = req.user;
+    if (!email) {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const { customerName, customerEmail, bookingDate, bookingType } = req.body;
+    const { bookingDate, bookingType, bookingSlot, bookingTime } = req.body;
+    const conflictQuery = {
+        bookingDate,
+        $or: [
+            { bookingType: 'Full Day' },
+            { bookingType: bookingType === 'Full Day' ? { $in: ['Half Day', 'Custom'] } : null },
 
-    if (!customerName || !customerEmail || !bookingDate || !bookingType) {
-        return res.status(400).json({ message: 'All fields are required' });
-    }
+            bookingType === 'Half Day' ? {
+                bookingType: 'Half Day',
+                bookingSlot
+            } : null,
 
-    const conflict = await isConflict(req.body);
-    if (conflict) {
+            (bookingType === 'Custom' && bookingTime < '12:00') ? {
+                bookingType: 'Half Day',
+                bookingSlot: 'First Half'
+            } : null,
+
+            (bookingType === 'Half Day' && bookingSlot === 'First Half') ? {
+                bookingType: 'Custom',
+                bookingTime: { $lt: '12:00' }
+            } : null,
+
+            bookingType === 'Custom' ? {
+                bookingType: 'Custom',
+                bookingTime
+            } : null,
+        ].filter(Boolean)
+    };
+
+    const conflictExists = await Booking.exists(conflictQuery);
+    if (conflictExists) {
         return res.status(400).json({ message: 'Booking conflict. Duplicate or overlapping booking exists.' });
     }
 
@@ -70,11 +47,11 @@ const requestBooking = asyncHandler(async (req, res) => {
 });
 
 const getAllBookings = asyncHandler(async (req, res) => {
-    const { email} = req.user;
-    if(!email) {
+    const { email } = req.user;
+    if (!email) {
         return res.status(401).json({ message: 'Unauthorized' });
     }
-    const bookingDetails = await Booking.find({ userEmail : email });
+    const bookingDetails = await Booking.find({ userEmail: email });
     res.status(200).json({
         bookings: bookingDetails
     })
