@@ -1,7 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const { verifyToken } = require("../middlewares/authMiddleware");
 const Booking = require("../models/bookingModel");
-const User = require("../models/userModel");
 
 const isConflict = async ({ bookingDate, bookingType, bookingSlot, bookingTime }) => {
     const bookings = await Booking.find({ bookingDate });
@@ -50,17 +49,10 @@ const isConflict = async ({ bookingDate, bookingType, bookingSlot, bookingTime }
 
 
 const requestBooking = asyncHandler(async (req, res) => {
-    const { authorization } = req.headers;
-    if (!authorization) {
-        throw Object.assign(new Error("token not provided! Invalid Request"), { status: 400 })
+    const { email } = req.user;    
+    if(!email) {
+        return res.status(401).json({ message: 'Unauthorized' });
     }
-    const tokenDetail = verifyToken(authorization);
-
-    if (!tokenDetail) {
-        throw Object.assign(new Error("Invalid Request!"), { status: 400 })
-    }
-
-    const { email } = tokenDetail;
 
     const { customerName, customerEmail, bookingDate, bookingType } = req.body;
 
@@ -73,22 +65,15 @@ const requestBooking = asyncHandler(async (req, res) => {
         return res.status(400).json({ message: 'Booking conflict. Duplicate or overlapping booking exists.' });
     }
 
-    const booking = new Booking({ ...req.body, userEmail: email });
-    await booking.save();
+    const booking = await Booking.create({ ...req.body, userEmail: email });
     res.status(201).json(booking);
 });
 
 const getAllBookings = asyncHandler(async (req, res) => {
-    const { authorization } = req.headers;
-    if (!authorization) {
-        throw Object.assign(new Error("token not provided! Invalid Request"), { status: 400 })
+    const { email} = req.user;
+    if(!email) {
+        return res.status(401).json({ message: 'Unauthorized' });
     }
-    const tokenDetail = verifyToken(authorization);
-
-    if (!tokenDetail) {
-        throw Object.assign(new Error("Invalid Request!"), { status: 400 })
-    }
-    const { email } = tokenDetail;
     const bookingDetails = await Booking.find({ userEmail : email });
     res.status(200).json({
         bookings: bookingDetails
