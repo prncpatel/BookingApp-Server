@@ -1,6 +1,8 @@
 const asyncHandler = require("express-async-handler");
+const NodeCache = require('node-cache');
 const Booking = require("../models/bookingModel");
 
+const cache = new NodeCache({ stdTTL: 10 });
 
 const requestBooking = asyncHandler(async (req, res) => {
     const { email } = req.user;
@@ -51,10 +53,18 @@ const getAllBookings = asyncHandler(async (req, res) => {
     if (!email) {
         return res.status(401).json({ message: 'Unauthorized' });
     }
-    const bookingDetails = await Booking.find({ userEmail: email });
-    res.status(200).json({
-        bookings: bookingDetails
-    })
+    if (cache.has("bookings")) {
+        const cachedBookings = cache.get("bookings");
+        return res.status(200).json({
+            bookings: cachedBookings
+        });
+    } else {
+        const bookingDetails = await Booking.find({ userEmail: email });
+        cache.set("bookings", bookingDetails);
+        return res.status(200).json({
+            bookings: bookingDetails
+        })
+    }
 })
 
 module.exports = { requestBooking, getAllBookings };
